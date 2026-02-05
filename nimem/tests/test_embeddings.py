@@ -1,13 +1,12 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 import numpy as np
-import asyncio
-from nimem import embeddings
+from nimem.core import embeddings
 
 @pytest.fixture
 def mock_infinity():
-    with patch('nimem.embeddings.AsyncEmbeddingEngine') as mock_engine, \
-         patch('nimem.embeddings.EngineArgs') as mock_args:
+    with patch('nimem.core.embeddings.AsyncEmbeddingEngine') as mock_engine, \
+         patch('nimem.core.embeddings.EngineArgs') as mock_args:
         
         mock_instance = AsyncMock()
         mock_engine.from_args.return_value = mock_instance

@@ -9,3 +9,5 @@ wheels/
 # Virtual environments
 .venv
 test_nimem.db
+TEST_INVALIDATION.txt
+context.md

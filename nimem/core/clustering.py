@@ -21,14 +21,12 @@ def perform_clustering(texts: List[str], min_cluster_size: int = 2) -> Result[Di
     if HDBSCAN is None:
         raise ImportError("fast_hdbscan is not installed.")
 
-    # Pure logic extracted
     def cluster_vectors(vectors: np.ndarray) -> Dict[int, List[str]]:
         clusterer = HDBSCAN(min_cluster_size=min_cluster_size)
         labels = clusterer.fit_predict(vectors)
         
         clusters: Dict[int, List[str]] = {}
         for text, label in zip(texts, labels):
-            # Filter noise (label -1)
             if label == -1:
                 continue
                 

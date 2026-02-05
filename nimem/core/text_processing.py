@@ -18,8 +18,6 @@ class Triple(NamedTuple):
 
 from . import schema
 
-# --- Lazy Model Loading ---
-
 @lru_cache(maxsize=1)
 def get_gliner_model():
     if GLiNER2 is None:
@@ -33,8 +31,6 @@ def get_fastcoref_model() -> 'FCoref':
         raise ImportError("FastCoref library not installed.")
     return FCoref(device='cpu')
 
-# --- Extraction Logic ---
-
 @safe
 def extract_triplets(text: str) -> List[Triple]:
     """
@@ -42,14 +38,9 @@ def extract_triplets(text: str) -> List[Triple]:
     """
     model = get_gliner_model()
     
-    # We use the schema defined in schema.py
-    # Adapt to the API shown in docs: extraction with list of relation types
-    # Or strict schema object if available. The docs showed both list and schema builder.
-    # We will use the list of keys from our schema for simplicity and flexibility.
     
     relation_types = list(schema.RELATIONS.keys())
     
-    # The user docs show: results = extractor.extract_relations(text, ["list", "of", "relations"])
     # We assume 'extract_relations' method exists on the loaded model.
     try:
         results = model.extract_relations(text, relation_types)
@@ -86,8 +77,6 @@ def resolve_coreferences(text: str) -> str:
     model = get_fastcoref_model()
     preds = model.predict(texts=[text])
     return preds[0].get_resolved_text()
-
-# --- Composition ---
 
 def process_text_pipeline(text: str) -> Result[Tuple[str, List[Triple]], Exception]:
     """

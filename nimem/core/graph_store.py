@@ -10,8 +10,6 @@ try:
 except ImportError:
     FalkorDB = None
 
-# --- Connection Management ---
-
 def get_graph_client(db_path='./nimem.db', graph_name='nimem_memory'):
     if FalkorDB is None:
         raise ImportError("falkordblite library not installed")
@@ -19,8 +17,6 @@ def get_graph_client(db_path='./nimem.db', graph_name='nimem_memory'):
     # FalkorDBLite works with a local file
     db = FalkorDB(db_path)
     return db.select_graph(graph_name)
-
-# --- Bitemporal Logic ---
 
 @safe
 def add_fact(
@@ -38,9 +34,6 @@ def add_fact(
     if valid_at is None:
         valid_at = time.time()
     
-    # Simple Soft-Delete Model
-    # valid_at: when the fact became true
-    # invalidated_at: when it ceased to be true (NULL if currently true)
     
     query = f"""
     MERGE (s:Entity {{name: $subject}})
@@ -88,10 +81,6 @@ def expire_facts(
     
     res = g.query(query, params)
     
-    # Debug logging
-    logging.info(f"EXPIRE DEBUG: Subject={subject}, Relation={relation}, InvalidatedAt={invalidated_at}")
-    logging.info(f"EXPIRE DEBUG: Query=\n{query}")
-    
     count = 0
     if res.result_set and len(res.result_set) > 0:
         count = res.result_set[0][0]
@@ -110,8 +99,6 @@ def query_valid_facts(
     """
     g = get_graph_client()
     
-    # Simple current state query: invalidated_at must be NULL
-    # If at_time is provided, we can also check history, but primarily we query current state.
     
     if at_time is None:
         query = f"""

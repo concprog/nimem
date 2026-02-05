@@ -17,8 +17,6 @@ except ImportError:
     AsyncEmbeddingEngine = None
     EngineArgs = None
 
-# --- Lazy Loading ---
-
 class EmbeddingService:
     _instance = None
     
@@ -28,18 +26,9 @@ class EmbeddingService:
             if AsyncEmbeddingEngine is None:
                raise ImportError("Infinity-emb not installed")
             
-            # Using synchronous wrapper logic or running loop for the async engine
-            # Ideally we run this in an async context, but for a simple library function
-            # we might block.
             engine_args = EngineArgs(model_name_or_path="michaelfeil/bge-small-en-v1.5", engine="optimum") 
             cls._instance = AsyncEmbeddingEngine.from_args(engine_args)
         return cls._instance
-
-# --- Functional Interface ---
-
-# Since Infinity is async native, we need to decide how to expose it to sync code.
-# The user asked for pragmatic. Using asyncio.run inside a library function is a bit anti-pattern
-# if the caller is async, but for a script it's fine.
 
 async def _embed_async(texts: List[str]) -> np.ndarray:
     engine = EmbeddingService.get_instance()

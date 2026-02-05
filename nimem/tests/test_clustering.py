@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import MagicMock, patch
 import numpy as np
-from nimem import clustering
+from nimem.core import clustering
 
 @pytest.fixture
 def mock_hdbscan():
-    with patch('nimem.clustering.HDBSCAN') as mock_cls:
+    with patch('nimem.core.clustering.HDBSCAN') as mock_cls:
         instance = MagicMock()
         mock_cls.return_value = instance
         # Mock fit_predict: return labels [0, 0, 1, -1] for 4 items
@@ -14,7 +14,7 @@ def mock_hdbscan():
 
 @pytest.fixture
 def mock_embeddings():
-    with patch('nimem.embeddings.embed_texts') as mock_emb:
+    with patch('nimem.core.embeddings.embed_texts') as mock_emb:
         from returns.result import Success
         # Return Success containing the array
         mock_emb.return_value = Success(np.zeros((4, 10)))

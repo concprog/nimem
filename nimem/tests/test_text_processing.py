@@ -1,13 +1,13 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from nimem import text_processing, schema
+from nimem.core import text_processing, schema
 from returns.result import Success, Failure
 
 # Mock heavy dependencies
 @pytest.fixture(autouse=True)
 def mock_models():
-    with patch('nimem.text_processing.GLiNER2') as mock_gliner, \
-         patch('nimem.text_processing.FCoref') as mock_fcoref:
+    with patch('nimem.core.text_processing.GLiNER2') as mock_gliner, \
+         patch('nimem.core.text_processing.FCoref') as mock_fcoref:
         
         # Setup GLiNER mock
         mock_model_instance = MagicMock()

@@ -1,19 +1,20 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from returns.result import Success
-from nimem import memory, schema
+from nimem.core import schema
+from nimem import memory
 
 @pytest.fixture
 def mock_deps():
-    with patch('nimem.text_processing.process_text_pipeline') as mock_proc, \
-         patch('nimem.graph_store.add_fact') as mock_add, \
-         patch('nimem.graph_store.expire_facts') as mock_expire, \
-         patch('nimem.graph_store.get_all_entities') as mock_get_ents, \
-         patch('nimem.clustering.perform_clustering') as mock_cluster, \
-         patch('nimem.clustering.generate_topic_name') as mock_topic_name:
+    with patch('nimem.core.text_processing.process_text_pipeline') as mock_proc, \
+         patch('nimem.core.graph_store.add_fact') as mock_add, \
+         patch('nimem.core.graph_store.expire_facts') as mock_expire, \
+         patch('nimem.core.graph_store.get_all_entities') as mock_get_ents, \
+         patch('nimem.core.clustering.perform_clustering') as mock_cluster, \
+         patch('nimem.core.clustering.generate_topic_name') as mock_topic_name:
          
          # Setup Text Processing
-         from nimem.text_processing import Triple
+         from nimem.core.text_processing import Triple
          triplets = [
              Triple("Alice", "works_for", "Google"),
              Triple("Bob", "knows", "Alice")
@@ -51,7 +52,7 @@ def test_ingest_text_flow(mock_deps):
 
 def test_ingest_cardinality_one(mock_deps):
     # Change mock to deliver a 'located_in' relation
-    from nimem.text_processing import Triple
+    from nimem.core.text_processing import Triple
     mock_deps['proc'].return_value = Success(("Txt", [Triple("Alice", "located_in", "Paris")]))
     
     res = memory.ingest_text("Alice is in Paris").unwrap()

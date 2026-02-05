@@ -2,7 +2,7 @@ import pytest
 import os
 import time
 from unittest.mock import patch
-from nimem import graph_store
+from nimem.core import graph_store
 
 FAKE_DB = './test_nimem.db'
 
@@ -16,7 +16,7 @@ def clean_db():
 
 @pytest.fixture
 def patch_db_path():
-    with patch('nimem.graph_store.get_graph_client') as mock_get:
+    with patch('nimem.core.graph_store.get_graph_client') as mock_get:
         # We perform the real logic but with our path
         # We need to import FalkorDB inside the patch scope or use the original reference
         from redislite.falkordb_client import FalkorDB

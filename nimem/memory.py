@@ -1,16 +1,10 @@
 from returns.result import Result, Success, Failure
-from . import text_processing, embeddings, graph_store, clustering, schema
+from .core import text_processing, embeddings, graph_store, clustering, schema
 import logging
 from typing import Dict, List
 
-# --- Orchestration ---
-
 def ingest_text(text: str) -> Result[str, Exception]:
-    # 1. Pipeline: Coref -> Triplet Extraction
     processed: Result = text_processing.process_text_pipeline(text)
-    
-    # 2. Side Effect: Store execution
-    # We wrap the storage logic in a safe function
     def store_triplets(data) -> Result[str, Exception]:
         resolved_text, triplets = data
         logging.info(f"Resolved Text: {resolved_text}")
@@ -47,8 +41,6 @@ def add_memory(subject: str, relation: str, obj: str) -> Result[bool, Exception]
     """
     return graph_store.add_fact(subject, relation, obj)
 
-# ... [Imports moved to top] ...
-
 def recall_memory(subject: str) -> Result[list, Exception]:
     """
     Recalls facts about a subject.
@@ -60,23 +52,6 @@ def consolidate_topics() -> Result[str, Exception]:
     Performs clustering on all entity names in the graph to find 'weak' relations (Topics).
     This creates 'BELONGS_TO' edges from Entities to new Topic nodes.
     """
-    # 1. Get all entities (simplification: just names for now, or fetch from graph)
-    # Ideally: graph_store.get_all_entities()
-    # For MVP, let's assume valid entities are those we just ingested or we query simple match.
-    # Note: FalkorDBLite query needed.
-    # Let's add a helper in graph_store or just run raw query here if we had access.
-    # We'll trust graph_store to have a helper. Let's add it.
-    
-    # Placeholder: getting entities is required. 
-    # Let's assume we can pass a list or we query valid facts and collect objects.
-    # For this snippet, I will query a broad range or just use a dummy list if graph_store doesn't support getAll yet.
-    
-    # Let's Update graph_store first? No, let's just do a blind scan of recent cache if possible?
-    # No, correct way is to fetch from DB. 
-    
-    # Assuming graph_store.get_all_entities exists or we add it. 
-    # I'll add it to graph_store in next step.
-    
     entities_res = graph_store.get_all_entities()
     
     # Composition: graph_entities -> clustering
