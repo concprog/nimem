@@ -2,7 +2,7 @@
 
 **A Non-LLM Episodic Memory System**
 
-Nimem is a lightweight, non-intelligent memory system for AI agents. It uses neural models for extraction and a bitemporal knowledge graph for storage—no generative LLMs required for ingestion.
+Nimem is a lightweight, non-intelligent memory system for AI agents. It uses neural models for extraction and a knowledge graph for storage—no generative LLMs required for ingestion.
 
 ## Quick Start
 
