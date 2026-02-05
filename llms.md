@@ -40,7 +40,7 @@ Unlike RAG systems that chunk text blindly, Nimem "understands" the structure of
 > [!NOTE]
 > This happens entirely locally on the CPU, typically in under 200ms suitable for real-time agents.
 
-**Code Look:** The pipeline acts as a functional chain in `nimem/text_processing.py`:
+**Code Look:** The pipeline acts as a functional chain in `nimem/core/text_processing.py`:
 
 ```python
 def process_text_pipeline(text: str) -> Result[Tuple[str, List[Triple]], Exception]:
@@ -62,7 +62,7 @@ Nimem doesn't guess what's important; it looks for specific types of information
 If a relation is defined as `"ONE"` (e.g., `located_in`), learning a new fact automatically invalidates the old one (updating the `valid_to` timestamp).
 
 ```python
-# nimem/schema.py
+# nimem/core/schema.py
 CARDINALITY = {
     "works_for": "MANY",   # Can have multiple jobs
     "located_in": "ONE",   # Only one location at a time
@@ -89,7 +89,7 @@ Nimem stores facts in a **Bitemporal Graph**. Every edge has two time dimensions
 
 This allows for "Time Travel"—you can see what the agent *knew* at a specific point in the past, or correct false memories without erasing the history of the mistake.
 
-**Structure in `nimem/graph_store.py`**:
+**Structure in `nimem/core/graph_store.py`**:
 
 ```cypher
 CREATE (s)-[r:{relation.upper()} {
@@ -109,7 +109,7 @@ If "Alice" and "Bob" frequently appear in similar contexts, their vector embeddi
 `(Alice)-[BELONGS_TO]->(Topic: Semantic_Cluster_1)`
 
 ```python
-# nimem/clustering.py - The logic behind topic discovery
+# nimem/core/clustering.py - The logic behind topic discovery
 def perform_clustering(texts: List[str], min_cluster_size: int = 2):
     return embeddings.embed_texts(texts).map(cluster_vectors)
 ```
