@@ -7,7 +7,8 @@ Nimem is a lightweight, non-intelligent memory system for AI agents. It uses neu
 ## Quick Start
 
 ```bash
-pip install nimem
+git clone https://github.com/concprog/nimem
+cd nimem
 ```
 
 ```python
