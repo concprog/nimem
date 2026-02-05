@@ -214,25 +214,6 @@ Manually add a fact to the graph.
 ### `memory.consolidate_topics() -> Result[str, Exception]`
 Run clustering to discover implicit topic relationships.
 
-## Performance
-
-All processing happens locally on CPU:
-- **Coreference**: ~50-100ms per document
-- **Extraction**: ~100-200ms per document
-- **Storage**: ~10-50ms per fact
-- **Total ingestion**: <300ms for typical conversational turns
-
-## Comparison
-
-| Feature | Nimem | RAG | Graphiti |
-|---------|-------|-----|----------|
-| **LLM for ingestion** | ❌ | ❌ | ✅ |
-| **Temporal reasoning** | ✅ | ❌ | ✅ |
-| **Fact updates** | ✅ | ❌ | ✅ |
-| **Privacy** | ✅ Local | ⚠️ Varies | ⚠️ Varies |
-| **Latency** | <300ms | <100ms | >1000ms |
-| **Cost** | Free | Free | $$$ |
-
 ## Advanced Usage
 
 ### Time Travel Queries
