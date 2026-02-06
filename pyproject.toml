@@ -1,0 +1,16 @@
+[project]
+name = "nimem"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gliner>=0.1.0",
+    "fastcoref>=2.0",
+    "infinity-emb[optimum]>=0.0.1",
+    "falkordblite>=0.0.1",
+    "numpy>=1.20.0",
+    "returns>=0.20.0",
+    "fast_hdbscan>=0.1.0",
+    "scikit-learn>=1.0.0",
+]
