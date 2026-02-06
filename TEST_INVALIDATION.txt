@@ -1,5 +1,0 @@
-# Test script for invalidation
-# Run this to check if "Alice lives in London" invalidates "Alice lives in Wonderland"
-# python main.py ingest "Alice lives in Wonderland."
-# python main.py ingest "Alice lives in London."
-# python main.py recall "Alice" -> Should show London and NOT Wonderland (or show Wonderland as expired if we filtered correctly)
