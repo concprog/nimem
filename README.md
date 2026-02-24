@@ -1,3 +1,5 @@
+> WIP: This does not work right now, due to issues with the coref code
+---
 # Nimem
 
 **A Non-LLM Episodic Memory System**
