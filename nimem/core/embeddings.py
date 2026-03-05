@@ -4,6 +4,7 @@ from typing import List
 
 import numpy as np
 from infinity_emb import AsyncEmbeddingEngine, EngineArgs
+from infinity_emb.primitives import InferenceEngine
 from returns.result import safe
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,8 @@ class EmbeddingService:
             logger.info("Initializing embedding engine (michaelfeil/bge-small-en-v1.5)")
             engine_args = EngineArgs(
                 model_name_or_path="michaelfeil/bge-small-en-v1.5",
-                engine="optimum",
+                engine=InferenceEngine.torch,
+                bettertransformer=False,
             )
             cls._instance = AsyncEmbeddingEngine.from_args(engine_args)
         return cls._instance
