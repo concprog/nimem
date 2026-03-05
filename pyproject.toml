@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "gliner>=0.1.0",
+    "gliner2",
     "fastcoref>=2.0",
     "infinity-emb[optimum]>=0.0.1",
     "falkordblite>=0.0.1",
