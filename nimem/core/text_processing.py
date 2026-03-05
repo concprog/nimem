@@ -4,7 +4,9 @@ from returns.result import Result, Success, Failure, safe
 import logging
 
 try:
+    logging.info("Attempting to import gliner2...")
     from gliner2 import GLiNER2
+    logging.info("Attempting to import fastcoref...")
     from fastcoref import FCoref
 except ImportError:
     logging.warning("gliner2 or fastcoref not found. Please ensure they are installed.")
@@ -23,12 +25,14 @@ def get_gliner_model():
     if GLiNER2 is None:
         raise ImportError("gliner2 library not installed.")
     # Using the model from user instruction or a default
+    logging.info("Loading GLiNER2 model: urchade/gliner_small-v2.1 ...")
     return GLiNER2.from_pretrained("urchade/gliner_small-v2.1")
 
 @lru_cache(maxsize=1)
 def get_fastcoref_model() -> 'FCoref':
     if FCoref is None:
         raise ImportError("FastCoref library not installed.")
+    logging.info("Loading FastCoref model (cpu)...")
     return FCoref(device='cpu')
 
 @safe

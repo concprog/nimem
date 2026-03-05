@@ -6,6 +6,7 @@ import logging
 
 # FalkorDBLite python client
 try:
+    logging.info("Attempting to import redislite.falkordb_client...")
     from redislite.falkordb_client import FalkorDB
 except ImportError:
     FalkorDB = None

@@ -1,10 +1,14 @@
 import logging
 import time
+
+# Configure logging early to catch import-time issues
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.info("Starting imports...")
+
 from nimem import memory
 from returns.result import Success, Failure
 
-# Configure logging to see what's happening under the hood
-logging.basicConfig(level=logging.ERROR) # Only show errors to keep output clean, update to INFO for details
+logging.info("Imports completed.")
 
 def section(title):
     print(f"\n{'-'*60}")

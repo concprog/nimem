@@ -9,8 +9,8 @@ import asyncio
 try:
     # Depending on how infinity is installed, it might be used as a library or server.
     # The user notes mention "Infinity-emb" library usage.
-    # We'll assume a direct library usage via `infinity_emb.Infinity` or similar if available,
     # or fall back to sentence-transformers if strictly needed, but NOTES says Infinity.
+    logging.info("Attempting to import infinity_emb...")
     from infinity_emb import EngineArgs, AsyncEmbeddingEngine
 except ImportError:
     logging.warning("infinity_emb not found.")
@@ -26,7 +26,9 @@ class EmbeddingService:
             if AsyncEmbeddingEngine is None:
                raise ImportError("Infinity-emb not installed")
             
+            logging.info("Initializing Infinity EngineArgs (michaelfeil/bge-small-en-v1.5)...")
             engine_args = EngineArgs(model_name_or_path="michaelfeil/bge-small-en-v1.5", engine="optimum") 
+            logging.info("Starting AsyncEmbeddingEngine...")
             cls._instance = AsyncEmbeddingEngine.from_args(engine_args)
         return cls._instance
 

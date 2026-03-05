@@ -4,6 +4,7 @@ import numpy as np
 import logging
 
 try:
+    logging.info("Attempting to import fast_hdbscan...")
     from fast_hdbscan import HDBSCAN
 except ImportError:
     HDBSCAN = None

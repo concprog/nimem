@@ -1,5 +1,15 @@
 from returns.result import Result, Success, Failure
-from .core import text_processing, embeddings, graph_store, clustering, schema
+import logging
+logging.info("Importing nimem.core.text_processing...")
+from .core import text_processing
+logging.info("Importing nimem.core.embeddings...")
+from .core import embeddings
+logging.info("Importing nimem.core.graph_store...")
+from .core import graph_store
+logging.info("Importing nimem.core.clustering...")
+from .core import clustering
+logging.info("Importing nimem.core.schema...")
+from .core import schema
 import logging
 from typing import Dict, List
 
