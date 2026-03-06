@@ -1,112 +1,231 @@
-from typing import List, Tuple, NamedTuple
-from functools import lru_cache
-from returns.result import Result, Success, Failure, safe
 import logging
+import re
+from typing import List, Tuple, NamedTuple, Set
+from functools import lru_cache
 
-try:
-    logging.info("Attempting to import gliner2...")
-    from gliner2 import GLiNER2
-except ImportError:
-    logging.warning("gliner2 not found. Please ensure it is installed.")
-    GLiNER2 = None
+import spacy
+from gliner import GLiNER
+from returns.result import Result, safe
 
-try:
-    logging.info("Attempting to import stanza...")
-    import stanza
-except ImportError:
-    logging.warning("stanza not found. Please ensure it is installed.")
-    stanza = None
+from . import schema
+
+logger = logging.getLogger(__name__)
+
+SPACY_MODEL = "en_core_web_sm"
 
 class Triple(NamedTuple):
     subject: str
     relation: str
     object: str
 
-from . import schema
+
+ENTITY_RELATION_MAP = {
+    ("person", "organization"): "works_for",
+    ("person", "location"): "located_in",
+    ("person", "person"): "knows",
+    ("organization", "location"): "located_in",
+    ("event", "location"): "happened_at",
+}
+
+
+@lru_cache(maxsize=1)
+def get_spacy_model():
+    logger.info(f"Loading spaCy model: {SPACY_MODEL}")
+    try:
+        return spacy.load(SPACY_MODEL)
+    except OSError:
+        logger.warning(f"spaCy model {SPACY_MODEL} not found, downloading...")
+        from spacy.cli import download
+
+        download(SPACY_MODEL)
+        return spacy.load(SPACY_MODEL)
+
 
 @lru_cache(maxsize=1)
 def get_gliner_model():
-    if GLiNER2 is None:
-        raise ImportError("gliner2 library not installed.")
-    logging.info("Loading GLiNER2 model: urchade/gliner_small-v2.1 ...")
-    return GLiNER2.from_pretrained("urchade/gliner2-multi-v1")
+    logger.info("Loading GLiNER model: urchade/gliner_small-v2.1")
+    return GLiNER.from_pretrained("urchade/gliner_small-v2.1")
+
 
 @lru_cache(maxsize=1)
-def get_coref_pipeline():
-    if stanza is None:
-        raise ImportError("stanza library not installed.")
-    logging.info("Loading Stanza coref pipeline (en)...")
-    return stanza.Pipeline("en", processors="tokenize,coref")
+def get_fastcoref_model():
+    from fastcoref import FCoref
 
-@safe
-def extract_triplets(text: str) -> List[Triple]:
-    """
-    Extracts triplets using GLiNER2 relation extraction.
-    """
-    model = get_gliner_model()
-    
-    relation_types = list(schema.RELATIONS.keys())
-    
-    try:
-        results = model.extract_relations(text, relation_types)
-    except AttributeError as e:
-        raise RuntimeError(f"GLiNER model does not support extract_relations: {e}") from e
-    
+    logger.info("Loading FastCoref model")
+    return FCoref(device="cpu")
+
+
+def _infer_relation(entity1_label: str, entity2_label: str) -> str | None:
+    key = (entity1_label.lower(), entity2_label.lower())
+    return ENTITY_RELATION_MAP.get(key)
+
+
+def _extract_relations_from_entities(text: str, entities: List[dict]) -> List[Triple]:
     triplets = []
-    relations_map = results.get('relation_extraction', {})
-    
-    for rel_type, instances in relations_map.items():
-        for instance in instances:
-            if isinstance(instance, tuple) or isinstance(instance, list):
-                if len(instance) >= 2:
-                    triplets.append(Triple(instance[0], rel_type, instance[1]))
-            elif isinstance(instance, dict):
-                 head = instance.get('head', {}).get('text', '')
-                 tail = instance.get('tail', {}).get('text', '')
-                 if head and tail:
-                     triplets.append(Triple(head, rel_type, tail))
+    sentences = re.split(r"[.!?]+", text)
+    sentence_starts = [0]
+    pos = 0
+    for sent in sentences[:-1]:
+        pos += len(sent) + 1
+        sentence_starts.append(pos)
+
+    def get_sentence_idx(entity_start: int) -> int:
+        for i, start in enumerate(sentence_starts):
+            if i + 1 < len(sentence_starts):
+                if sentence_starts[i] <= entity_start < sentence_starts[i + 1]:
+                    return i
+            else:
+                return i
+        return len(sentence_starts) - 1
+
+    sentence_entities: dict[int, List[dict]] = {}
+    for entity in entities:
+        sent_idx = get_sentence_idx(entity["start"])
+        if sent_idx not in sentence_entities:
+            sentence_entities[sent_idx] = []
+        sentence_entities[sent_idx].append(entity)
+
+    for sent_idx, sent_entities in sentence_entities.items():
+        for i, e1 in enumerate(sent_entities):
+            for e2 in sent_entities[i + 1 :]:
+                relation = _infer_relation(e1["label"], e2["label"])
+                if relation and relation in schema.RELATIONS:
+                    triplets.append(Triple(e1["text"], relation, e2["text"]))
+
+                relation_rev = _infer_relation(e2["label"], e1["label"])
+                if (
+                    relation_rev
+                    and relation_rev in schema.RELATIONS
+                    and relation_rev != relation
+                ):
+                    triplets.append(Triple(e2["text"], relation_rev, e1["text"]))
 
     return triplets
 
+
+def _get_noun_phrase(token) -> str:
+    parts = []
+    for child in token.lefts:
+        if child.dep_ in ("compound", "amod", "poss") and child.dep_ != "det":
+            parts.append(child.text)
+    parts.append(token.text)
+    return " ".join(parts)
+
+
+def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]:
+    nlp = get_spacy_model()
+    doc = nlp(text)
+    triplets = []
+
+    for token in doc:
+        if token.pos_ != "VERB":
+            continue
+
+        verb_lemma = token.lemma_.lower()
+        relation = schema.VERB_TO_RELATION.get(verb_lemma)
+        if not relation:
+            continue
+
+        subjects = [c for c in token.children if c.dep_ in ("nsubj", "nsubjpass")]
+        direct_objects = [
+            c for c in token.children if c.dep_ in ("dobj", "attr", "oprd")
+        ]
+
+        prep_objects = []
+        with_objects = []
+
+        for child in token.children:
+            if child.dep_ == "prep":
+                prep_text = child.text.lower()
+                for pobj in child.children:
+                    if pobj.dep_ == "pobj":
+                        if prep_text in schema.WITH_PREPOSITIONS:
+                            with_objects.append(pobj)
+                        else:
+                            prep_objects.append(pobj)
+
+        all_objects = direct_objects + prep_objects
+
+        for subj in subjects:
+            subj_text = subj.text
+            if subj_text not in known_entities:
+                subj_ent = None
+                for ent in doc.ents:
+                    if subj.i >= ent.start and subj.i < ent.end:
+                        subj_ent = ent
+                        break
+                if not subj_ent:
+                    continue
+
+            for obj in all_objects:
+                obj_text = obj.text
+                if obj_text in known_entities:
+                    triplets.append(Triple(subj_text, relation, obj_text))
+                else:
+                    obj_ent = None
+                    for ent in doc.ents:
+                        if obj.i >= ent.start and obj.i < ent.end:
+                            obj_ent = ent
+                            obj_text = ent.text
+                            break
+
+                    if obj_ent:
+                        triplets.append(Triple(subj_text, relation, obj_text))
+                    else:
+                        descriptive_name = f"{subj_text}'s {obj.text}"
+                        triplets.append(Triple(subj_text, relation, descriptive_name))
+
+            for with_obj in with_objects:
+                with_text = with_obj.text
+                if with_text in known_entities or any(
+                    with_obj.i >= ent.start and with_obj.i < ent.end for ent in doc.ents
+                ):
+                    triplets.append(Triple(subj_text, "worked_with", with_text))
+                    for obj in all_objects:
+                        if obj.text in known_entities:
+                            triplets.append(Triple(with_text, relation, obj.text))
+
+    return triplets
+
+
+@safe
+def extract_triplets(text: str) -> List[Triple]:
+    model = get_gliner_model()
+    labels = list(schema.ENTITIES.keys())
+    entities = model.predict_entities(text, labels, threshold=0.5)
+    logger.debug(f"Extracted entities: {entities}")
+
+    known_entities = {e["text"] for e in entities}
+    triplets_heuristic = _extract_relations_from_entities(text, entities)
+    triplets_verb = _extract_verb_relations(text, known_entities)
+
+    seen = set()
+    combined = []
+    for t in triplets_heuristic + triplets_verb:
+        key = (t.subject.lower(), t.relation.lower(), t.object.lower())
+        if key not in seen:
+            seen.add(key)
+            combined.append(t)
+
+    logger.debug(f"Combined triplets: {combined}")
+    return combined
+
+
 @safe
 def resolve_coreferences(text: str) -> str:
-    """
-    Resolves coreferences using Stanza's coref pipeline.
-    Replaces non-representative mentions with their representative text.
-    """
-    pipe = get_coref_pipeline()
-    doc = pipe(text)
-    
-    if not doc.coref:
-        return text
-    
-    replacements = []
-    for chain in doc.coref:
-        rep_text = chain.representative_text
-        for mention in chain.mentions:
-            if mention == chain.mentions[chain.representative_index]:
-                continue
-            
-            sent = doc.sentences[mention.sentence]
-            words = sent.words[mention.start_word:mention.end_word + 1]
-            start_char = words[0].start_char
-            end_char = words[-1].end_char
-            replacements.append((start_char, end_char, rep_text))
-    
-    replacements.sort(key=lambda x: x[0], reverse=True)
-    resolved = text
-    for start, end, rep in replacements:
-        resolved = resolved[:start] + rep + resolved[end:]
-    
-    return resolved
+    model = get_fastcoref_model()
+    preds = model.predict(texts=[text])
+    return preds[0].get_resolved_text()
 
-def process_text_pipeline(text: str) -> Result[Tuple[str, List[Triple]], Exception]:
-    """
-    Chains coreference resolution -> Triplet Extraction.
-    Uses bind to propagate errors safely without unwrap.
-    """
-    return resolve_coreferences(text).bind(
-        lambda resolved: extract_triplets(resolved).map(
-             lambda triplets: (resolved, triplets)
+
+def process_text_pipeline(
+    text: str, use_coref: bool = False
+) -> Result[Tuple[str, List[Triple]], Exception]:
+    if use_coref:
+        return resolve_coreferences(text).bind(
+            lambda resolved: extract_triplets(resolved).map(
+                lambda triplets: (resolved, triplets)
+            )
         )
-    )
+    else:
+        return extract_triplets(text).map(lambda triplets: (text, triplets))

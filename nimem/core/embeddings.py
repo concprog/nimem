@@ -1,31 +1,27 @@
-from typing import List
-import numpy as np
-from returns.result import Result, safe
-from functools import lru_cache
-import logging
-
 import asyncio
+import logging
+from typing import List
 
-try:
-    logging.info("Attempting to import infinity_emb...")
-    from infinity_emb import EngineArgs, AsyncEmbeddingEngine
-except ImportError:
-    logging.warning("infinity_emb not found.")
-    AsyncEmbeddingEngine = None
-    EngineArgs = None
+import numpy as np
+from infinity_emb import AsyncEmbeddingEngine, EngineArgs
+from infinity_emb.primitives import InferenceEngine
+from returns.result import safe
+
+logger = logging.getLogger(__name__)
+
 
 class EmbeddingService:
     _instance = None
-    
+
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            if AsyncEmbeddingEngine is None:
-               raise ImportError("Infinity-emb not installed")
-            
-            logging.info("Initializing Infinity EngineArgs (michaelfeil/bge-small-en-v1.5)...")
-            engine_args = EngineArgs(model_name_or_path="michaelfeil/bge-small-en-v1.5", engine="optimum") 
-            logging.info("Starting AsyncEmbeddingEngine...")
+            logger.info("Initializing embedding engine (michaelfeil/bge-small-en-v1.5)")
+            engine_args = EngineArgs(
+                model_name_or_path="michaelfeil/bge-small-en-v1.5",
+                engine=InferenceEngine.torch,
+                bettertransformer=False,
+            )
             cls._instance = AsyncEmbeddingEngine.from_args(engine_args)
         return cls._instance
 
@@ -33,16 +29,15 @@ class EmbeddingService:
     def reset(cls):
         cls._instance = None
 
+
 async def _embed_async(texts: List[str]) -> np.ndarray:
     engine = EmbeddingService.get_instance()
-    async with engine: 
+    async with engine:
         embeddings, _ = await engine.embed(texts)
-    return embeddings
+    return np.array(embeddings)
+
 
 @safe
 def embed_texts(texts: List[str]) -> np.ndarray:
-    """
-    Embeds a list of texts using Infinity-emb.
-    Returns Result[np.ndarray, Exception].
-    """
+    """Embeds a list of texts using Infinity-emb."""
     return asyncio.run(_embed_async(texts))
