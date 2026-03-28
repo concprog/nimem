@@ -32,9 +32,16 @@ def extract_relations_spacy(text: str, entities: List[Entity]) -> List[Triple]:
 
 
 def extract_triplets(
-    text: str, use_gliner2: bool = False
+    text: str, use_gliner2: bool = False, use_conceptnet: bool = False
 ) -> Result[List[Triple], Exception]:
-    return relation_extraction.extract_triplets(text, use_gliner2=use_gliner2)
+    return relation_extraction.extract_triplets(
+        text, use_gliner2=use_gliner2, use_conceptnet=use_conceptnet
+    )
+
+
+def extract_triplets_conceptnet(text: str, threshold: float = 0.5) -> List[Triple]:
+    """Extract triplets using ConceptNet + semantic similarity."""
+    return relation_extraction.extract_triplets_conceptnet(text, threshold=threshold)
 
 
 def resolve_coreferences(text: str) -> Result[str, Exception]:
@@ -42,18 +49,21 @@ def resolve_coreferences(text: str) -> Result[str, Exception]:
 
 
 def process_text_pipeline(
-    text: str, use_coref: bool = False, use_gliner2: bool = False
+    text: str,
+    use_coref: bool = False,
+    use_gliner2: bool = False,
+    use_conceptnet: bool = False,
 ) -> Result[Tuple[str, List[Triple]], Exception]:
     if use_coref:
         return resolve_coreferences(text).bind(
-            lambda resolved: extract_triplets(resolved, use_gliner2=use_gliner2).map(
-                lambda triplets: (resolved, triplets)
-            )
+            lambda resolved: extract_triplets(
+                resolved, use_gliner2=use_gliner2, use_conceptnet=use_conceptnet
+            ).map(lambda triplets: (resolved, triplets))
         )
     else:
-        return extract_triplets(text, use_gliner2=use_gliner2).map(
-            lambda triplets: (text, triplets)
-        )
+        return extract_triplets(
+            text, use_gliner2=use_gliner2, use_conceptnet=use_conceptnet
+        ).map(lambda triplets: (text, triplets))
 
 
 Triple = Triple

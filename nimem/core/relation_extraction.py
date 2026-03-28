@@ -270,15 +270,67 @@ def _extract_gliner_relations(text: str) -> List[Triple]:
     return triplets
 
 
-def extract_triplets_spacy(text: str) -> List[Triple]:
-    """Full spaCy pipeline: entity extraction + relation extraction."""
+def extract_triplets_spacy(
+    text: str, use_conceptnet: bool = False, threshold: float = 0.5
+) -> List[Triple]:
+    """Full spaCy pipeline: entity extraction + relation extraction.
+
+    Args:
+        text: Input text
+        use_conceptnet: If True, use ConceptNet for relation disambiguation
+        threshold: Confidence threshold for ConceptNet disambiguation
+    """
     from .entity_recognition import extract_entities_spacy
 
     entities = extract_entities_spacy(text)
     logger.debug(f"Extracted entities: {entities}")
     triplets = extract_relations_spacy(text, entities)
     logger.debug(f"spaCy triplets: {triplets}")
+
+    if use_conceptnet:
+        triplets = _disambiguate_with_conceptnet(text, entities, triplets, threshold)
+
     return triplets
+
+
+def _disambiguate_with_conceptnet(
+    text: str, entities: List[Entity], triplets: List[Triple], threshold: float = 0.5
+) -> List[Triple]:
+    """Disambiguate relations using ConceptNet + semantic similarity."""
+    from . import conceptnet
+
+    if not triplets:
+        return triplets
+
+    disambiguated = []
+    entity_dicts = {e.text: e for e in entities}
+
+    for triple in triplets:
+        head_ent = entity_dicts.get(triple.subject)
+        tail_ent = entity_dicts.get(triple.object)
+
+        if head_ent and tail_ent:
+            result = conceptnet.resolve_relation_with_conceptnet(
+                original_text=text,
+                head_text=triple.subject,
+                head_type=head_ent.label,
+                tail_text=triple.object,
+                tail_type=tail_ent.label,
+                threshold=threshold,
+            )
+
+            if result:
+                relation, confidence = result
+                disambiguated.append(Triple(triple.subject, relation, triple.object))
+                logger.debug(
+                    f"Disambiguated: {triple.subject} --[{relation}]--> {triple.object} (confidence: {confidence:.2f})"
+                )
+            else:
+                disambiguated.append(triple)
+        else:
+            disambiguated.append(triple)
+
+    return disambiguated
 
 
 def extract_triplets_gliner(text: str) -> List[Triple]:
@@ -288,9 +340,42 @@ def extract_triplets_gliner(text: str) -> List[Triple]:
     return triplets
 
 
+def extract_triplets_conceptnet(text: str, threshold: float = 0.5) -> List[Triple]:
+    """Extract triplets using ConceptNet + semantic similarity (no spaCy)."""
+    from .entity_recognition import extract_entities_spacy
+    from . import conceptnet
+
+    entities = extract_entities_spacy(text)
+    logger.debug(f"Entities for ConceptNet: {entities}")
+
+    entity_dicts = [
+        {"text": e.text, "label": e.label, "start": e.start, "end": e.end}
+        for e in entities
+    ]
+
+    triplets = conceptnet.extract_triplets_with_conceptnet(
+        text, entity_dicts, threshold=threshold
+    )
+    logger.debug(f"ConceptNet triplets: {triplets}")
+    return triplets
+
+
 @safe
-def extract_triplets(text: str, use_gliner2: bool = False) -> List[Triple]:
-    """Legacy function - dispatches to appropriate implementation."""
+def extract_triplets(
+    text: str, use_gliner2: bool = False, use_conceptnet: bool = False
+) -> List[Triple]:
+    """Extract triplets using specified method.
+
+    Args:
+        text: Input text
+        use_gliner2: Use GLiNER joint extraction
+        use_conceptnet: Use spaCy + ConceptNet disambiguation (hybrid)
+
+    Returns:
+        List of Triple (subject, relation, object)
+    """
     if use_gliner2:
         return extract_triplets_gliner(text)
+    if use_conceptnet:
+        return extract_triplets_spacy(text, use_conceptnet=True)
     return extract_triplets_spacy(text)
