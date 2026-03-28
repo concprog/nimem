@@ -16,7 +16,7 @@ wheels/
 
 # Virtual environments
 .venv
-test_nimem.db
+test_nimem.db*
 TEST_INVALIDATION.txt
 context.md
 example.py

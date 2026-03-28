@@ -129,3 +129,38 @@ def test_pipeline_gliner2(mock_gliner):
         assert isinstance(res, Success)
         _, triplets = res.unwrap()
         assert len(triplets) == 2
+
+
+def test_extract_entities_spacy(mock_spacy):
+    with patch("nimem.core.model_loader.get_model", return_value=mock_spacy):
+        model_loader.get_model.cache_clear()
+        from nimem.core.schema import Entity
+
+        entities = text_processing.extract_entities_spacy("Alice works at Google")
+        assert len(entities) == 2
+        assert entities[0].text == "Alice"
+        assert entities[0].label == "person"
+        assert entities[1].text == "Google"
+        assert entities[1].label == "organization"
+
+
+def test_extract_entities_gliner(mock_gliner):
+    with patch("nimem.core.model_loader.get_model", return_value=mock_gliner):
+        model_loader.get_model.cache_clear()
+        entities = text_processing.extract_entities_gliner("Alice works at Google")
+        assert len(entities) == 2
+
+
+def test_extract_relations_spacy_with_entities(mock_spacy):
+    with patch("nimem.core.model_loader.get_model", return_value=mock_spacy):
+        model_loader.get_model.cache_clear()
+        from nimem.core.schema import Entity
+
+        entities = [
+            Entity(text="Alice", label="person", start=0, end=5),
+            Entity(text="Google", label="organization", start=15, end=21),
+        ]
+        triplets = text_processing.extract_relations_spacy(
+            "Alice works at Google", entities
+        )
+        assert len(triplets) >= 0

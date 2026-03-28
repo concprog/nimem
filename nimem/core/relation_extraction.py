@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import List, Set
+from typing import List, Set, Tuple, Optional, Dict, Any
 
 from returns.result import safe
 
@@ -16,67 +16,46 @@ from .model_loader import get_model
 
 logger = logging.getLogger(__name__)
 
+SUBJECT_DEPS = {"nsubj", "nsubjpass"}
+OBJECT_DEPS = {"dobj", "attr", "oprd", "pobj"}
+ALL_OBJECT_DEPS = OBJECT_DEPS | {"pobj"}
+
 
 def _infer_relation(entity1_label: str, entity2_label: str) -> str | None:
     key = (entity1_label.lower(), entity2_label.lower())
     return ENTITY_RELATION_MAP.get(key)
 
 
-def _extract_relations_from_entities(text: str, entities: List[Entity]) -> List[Triple]:
-    """Extract relations from entity pairs in same sentence."""
-    triplets = []
-    sentences = re.split(r"[.!?]+", text)
-    sentence_starts = [0]
-    pos = 0
-    for sent in sentences[:-1]:
-        pos += len(sent) + 1
-        sentence_starts.append(pos)
-
-    def get_sentence_idx(entity_start: int) -> int:
-        for i, start in enumerate(sentence_starts):
-            if i + 1 < len(sentence_starts):
-                if sentence_starts[i] <= entity_start < sentence_starts[i + 1]:
-                    return i
-            else:
-                return i
-        return len(sentence_starts) - 1
-
-    sentence_entities: dict[int, List[Entity]] = {}
-    for entity in entities:
-        sent_idx = get_sentence_idx(entity.start)
-        sentence_entities.setdefault(sent_idx, []).append(entity)
-
-    for sent_entities in sentence_entities.values():
-        for i, e1 in enumerate(sent_entities):
-            for e2 in sent_entities[i + 1 :]:
-                relation = _infer_relation(e1.label, e2.label)
-                if relation and relation in RELATIONS:
-                    triplets.append(Triple(e1.text, relation, e2.text))
-
-                relation_rev = _infer_relation(e2.label, e1.label)
-                if (
-                    relation_rev
-                    and relation_rev in RELATIONS
-                    and relation_rev != relation
-                ):
-                    triplets.append(Triple(e2.text, relation_rev, e1.text))
-
-    return triplets
+def _build_entity_lookup(doc, entities: List[Entity]) -> Dict[int, Entity]:
+    """Build token index -> entity mapping using spaCy's char_span."""
+    token_to_entity = {}
+    for ent in entities:
+        span = doc.char_span(ent.start, ent.end)
+        if span is not None:
+            for token in span:
+                token_to_entity[token.i] = ent
+    return token_to_entity
 
 
-def _get_noun_phrase(token) -> str:
-    parts = []
-    for child in token.lefts:
-        if child.dep_ in ("compound", "amod", "poss") and child.dep_ != "det":
-            parts.append(child.text)
-    parts.append(token.text)
-    return " ".join(parts)
+def _get_entity_for_token(
+    token, token_to_entity: Dict[int, Entity]
+) -> Optional[Entity]:
+    """Find entity containing this token."""
+    if token.i in token_to_entity:
+        return token_to_entity[token.i]
+    for child in token.children:
+        if child.i in token_to_entity:
+            return token_to_entity[child.i]
+    for ancestor in token.ancestors:
+        if ancestor.i in token_to_entity:
+            return token_to_entity[ancestor.i]
+    return None
 
 
-def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]:
+def _extract_verb_relations(
+    doc, entities: List[Entity], token_to_entity: Dict[int, Entity]
+) -> List[Triple]:
     """Extract relations based on verb parsing."""
-    nlp = get_model("spacy")
-    doc = nlp(text)
     triplets = []
 
     for token in doc:
@@ -85,13 +64,9 @@ def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]
 
         verb_lemma = token.lemma_.lower()
         relation = VERB_TO_RELATION.get(verb_lemma)
-        if not relation:
-            continue
 
-        subjects = [c for c in token.children if c.dep_ in ("nsubj", "nsubjpass")]
-        direct_objects = [
-            c for c in token.children if c.dep_ in ("dobj", "attr", "oprd")
-        ]
+        subjects = [c for c in token.children if c.dep_ in SUBJECT_DEPS]
+        direct_objects = [c for c in token.children if c.dep_ in OBJECT_DEPS]
 
         prep_objects = []
         with_objects = []
@@ -109,62 +84,166 @@ def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]
         all_objects = direct_objects + prep_objects
 
         for subj in subjects:
-            subj_text = subj.text
-            if subj_text not in known_entities:
-                subj_ent = None
-                for ent in doc.ents:
-                    if subj.i >= ent.start and subj.i < ent.end:
-                        subj_ent = ent
-                        break
-                if not subj_ent:
-                    continue
+            subj_ent = _get_entity_for_token(subj, token_to_entity)
+            if not subj_ent:
+                continue
 
             for obj in all_objects:
-                obj_text = obj.text
-                if obj_text in known_entities:
-                    triplets.append(Triple(subj_text, relation, obj_text))
+                obj_ent = _get_entity_for_token(obj, token_to_entity)
+                if obj_ent:
+                    if relation:
+                        triplets.append(Triple(subj_ent.text, relation, obj_ent.text))
                 else:
-                    obj_ent = None
-                    for ent in doc.ents:
-                        if obj.i >= ent.start and obj.i < ent.end:
-                            obj_ent = ent
-                            obj_text = ent.text
-                            break
-
-                    if obj_ent:
-                        triplets.append(Triple(subj_text, relation, obj_text))
-                    else:
-                        descriptive_name = f"{subj_text}'s {obj.text}"
-                        triplets.append(Triple(subj_text, relation, descriptive_name))
+                    descriptive_name = f"{subj_ent.text}'s {obj.text}"
+                    if relation:
+                        triplets.append(
+                            Triple(subj_ent.text, relation, descriptive_name)
+                        )
 
             for with_obj in with_objects:
-                with_text = with_obj.text
-                if with_text in known_entities or any(
-                    with_obj.i >= ent.start and with_obj.i < ent.end for ent in doc.ents
-                ):
-                    triplets.append(Triple(subj_text, "worked_with", with_text))
+                with_ent = _get_entity_for_token(with_obj, token_to_entity)
+                if with_ent:
+                    if relation:
+                        triplets.append(
+                            Triple(subj_ent.text, "worked_with", with_ent.text)
+                        )
                     for obj in all_objects:
-                        if obj.text in known_entities:
-                            triplets.append(Triple(with_text, relation, obj.text))
+                        obj_ent = _get_entity_for_token(obj, token_to_entity)
+                        if obj_ent and relation:
+                            triplets.append(
+                                Triple(with_ent.text, relation, obj_ent.text)
+                            )
+
+    return triplets
+
+
+def _extract_prep_relations(
+    doc, entities: List[Entity], token_to_entity: Dict[int, Entity]
+) -> List[Triple]:
+    """Extract relations from prepositional phrases."""
+    triplets = []
+
+    prep_relation_map = {
+        "in": "located_in",
+        "at": "located_in",
+        "on": "located_in",
+        "with": "worked_with",
+        "for": "works_for",
+        "to": "related_to",
+        "from": "related_to",
+    }
+
+    for ent in entities:
+        span = doc.char_span(ent.start, ent.end)
+        if span is None:
+            continue
+        for token in span:
+            for child in token.children:
+                if child.dep_ == "prep":
+                    prep_text = child.text.lower()
+                    relation = prep_relation_map.get(prep_text)
+
+                    if relation and relation in RELATIONS:
+                        for pobj in child.children:
+                            if pobj.dep_ == "pobj":
+                                obj_ent = _get_entity_for_token(pobj, token_to_entity)
+                                if obj_ent and obj_ent != ent:
+                                    triplets.append(
+                                        Triple(ent.text, relation, obj_ent.text)
+                                    )
+
+    return triplets
+
+
+def _extract_copula_relations(
+    doc, entities: List[Entity], token_to_entity: Dict[int, Entity]
+) -> List[Triple]:
+    """Extract relations from copula constructions (is, was, became, etc.)."""
+    triplets = []
+
+    for token in doc:
+        if token.lemma_ not in {"be", "become", "remain", "stay"}:
+            continue
+
+        subjects = [c for c in token.children if c.dep_ in SUBJECT_DEPS]
+        attributes = [c for c in token.children if c.dep_ == "attr"]
+
+        for subj in subjects:
+            subj_ent = _get_entity_for_token(subj, token_to_entity)
+            if not subj_ent:
+                continue
+
+            for attr in attributes:
+                attr_ent = _get_entity_for_token(attr, token_to_entity)
+                if attr_ent:
+                    relation = _infer_relation(subj_ent.label, attr_ent.label)
+                    if relation and relation in RELATIONS:
+                        triplets.append(Triple(subj_ent.text, relation, attr_ent.text))
+
+    return triplets
+
+
+def _extract_entity_pair_relations(
+    doc, entities: List[Entity], token_to_entity: Dict[int, Entity]
+) -> List[Triple]:
+    """Extract relations from entity pairs in same sentence using dependency paths."""
+    triplets = []
+
+    sentences = list(doc.sents)
+
+    for sent in sentences:
+        sent_entities = [
+            ent
+            for ent in entities
+            if ent.start >= sent.start_char and ent.end <= sent.end_char
+        ]
+
+        for i, e1 in enumerate(sent_entities):
+            for e2 in sent_entities[i + 1 :]:
+                relation = _infer_relation(e1.label, e2.label)
+                if relation and relation in RELATIONS:
+                    triplets.append(Triple(e1.text, relation, e2.text))
+
+                relation_rev = _infer_relation(e2.label, e1.label)
+                if (
+                    relation_rev
+                    and relation_rev in RELATIONS
+                    and relation_rev != relation
+                ):
+                    triplets.append(Triple(e2.text, relation_rev, e1.text))
 
     return triplets
 
 
 def extract_relations_spacy(text: str, entities: List[Entity]) -> List[Triple]:
     """Extract relations from pre-extracted entities using spaCy."""
-    known_entities = {e.text for e in entities}
-    triplets_heuristic = _extract_relations_from_entities(text, entities)
-    triplets_verb = _extract_verb_relations(text, known_entities)
+    nlp = get_model("spacy")
+    doc = nlp(text)
+
+    token_to_entity = _build_entity_lookup(doc, entities)
+
+    verb_triplets = _extract_verb_relations(doc, entities, token_to_entity)
+    prep_triplets = _extract_prep_relations(doc, entities, token_to_entity)
+    copula_triplets = _extract_copula_relations(doc, entities, token_to_entity)
+    entity_pair_triplets = _extract_entity_pair_relations(
+        doc, entities, token_to_entity
+    )
+
+    all_triplets = (
+        verb_triplets + prep_triplets + copula_triplets + entity_pair_triplets
+    )
 
     seen = set()
     combined = [
         t
-        for t in triplets_heuristic + triplets_verb
+        for t in all_triplets
         if not (
             (key := (t.subject.lower(), t.relation.lower(), t.object.lower())) in seen
             or seen.add(key)
         )
     ]
+
+    logger.debug(f"spaCy relation triplets: {combined}")
     return combined
 
 
@@ -191,7 +270,6 @@ def _extract_gliner_relations(text: str) -> List[Triple]:
     return triplets
 
 
-@safe
 def extract_triplets_spacy(text: str) -> List[Triple]:
     """Full spaCy pipeline: entity extraction + relation extraction."""
     from .entity_recognition import extract_entities_spacy
@@ -203,7 +281,6 @@ def extract_triplets_spacy(text: str) -> List[Triple]:
     return triplets
 
 
-@safe
 def extract_triplets_gliner(text: str) -> List[Triple]:
     """GLiNER joint extraction (entities + relations)."""
     triplets = _extract_gliner_relations(text)
@@ -211,7 +288,6 @@ def extract_triplets_gliner(text: str) -> List[Triple]:
     return triplets
 
 
-# Backward compatibility
 @safe
 def extract_triplets(text: str, use_gliner2: bool = False) -> List[Triple]:
     """Legacy function - dispatches to appropriate implementation."""
