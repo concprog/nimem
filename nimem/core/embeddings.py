@@ -7,6 +7,9 @@ from infinity_emb import AsyncEmbeddingEngine, EngineArgs
 from infinity_emb.primitives import InferenceEngine
 from returns.result import safe
 
+from .config import EMBEDDING_MODEL, INFINITY_CACHE_DIR
+from .cache_layer import setup_cache_directories
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,11 +19,13 @@ class EmbeddingService:
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            logger.info("Initializing embedding engine (michaelfeil/bge-small-en-v1.5)")
+            setup_cache_directories()
+            logger.info("Initializing embedding engine (%s)", EMBEDDING_MODEL)
             engine_args = EngineArgs(
-                model_name_or_path="michaelfeil/bge-small-en-v1.5",
+                model_name_or_path=EMBEDDING_MODEL,
                 engine=InferenceEngine.torch,
                 bettertransformer=False,
+                vector_disk_cache_path=INFINITY_CACHE_DIR,
             )
             cls._instance = AsyncEmbeddingEngine.from_args(engine_args)
         return cls._instance

@@ -7,6 +7,7 @@ wheels/
 *.egg-info
 
 # caches
+.nimem_cache
 .infinity_cache
 .pytest_cache
 .ruff_cache
