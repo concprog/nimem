@@ -4,6 +4,7 @@ from nimem.core.text_processing import (
     extract_entities_spacy,
     extract_relations_spacy,
 )
+from nimem.core.relation_extraction import extract_triplets_conceptnet
 
 text = "John works for Apple Inc. and lives in San Francisco. Alice founded SpaceX. Sarah works for Google."
 
@@ -35,7 +36,13 @@ else:
 for t in triplets:
     print(f"  {t.subject} --[{t.relation}]--> {t.object}")
 
-# Method 4: Full pipeline with coreference
+# Method 4: ConceptNet-only (dependency pairs + ConceptNet disambiguation)
+print("\n=== ConceptNet-only (dependency pairs) ===")
+triplets = extract_triplets_conceptnet(text)
+for t in triplets:
+    print(f"  {t.subject} --[{t.relation}]--> {t.object}")
+
+# Method 5: Full pipeline with coreference
 print("\n=== Pipeline with coreference ===")
 long_text = "John works for Apple Inc. He lives in San Francisco."
 resolved, triplets = process_text_pipeline(long_text, use_coref=False).unwrap()

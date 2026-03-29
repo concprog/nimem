@@ -1,6 +1,5 @@
 import logging
-import re
-from typing import List, Set, Tuple, Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 
 from returns.result import safe
 
@@ -18,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 SUBJECT_DEPS = {"nsubj", "nsubjpass"}
 OBJECT_DEPS = {"dobj", "attr", "oprd", "pobj"}
-ALL_OBJECT_DEPS = OBJECT_DEPS | {"pobj"}
 
 
 def _infer_relation(entity1_label: str, entity2_label: str) -> str | None:
@@ -341,22 +339,42 @@ def extract_triplets_gliner(text: str) -> List[Triple]:
 
 
 def extract_triplets_conceptnet(text: str, threshold: float = 0.5) -> List[Triple]:
-    """Extract triplets using ConceptNet + semantic similarity (no spaCy)."""
-    from .entity_recognition import extract_entities_spacy
+    """Extract triplets using dependency-based pair finding + ConceptNet disambiguation."""
+    from .entity_recognition import extract_entities_and_pairs
     from . import conceptnet
 
-    entities = extract_entities_spacy(text)
-    logger.debug(f"Entities for ConceptNet: {entities}")
+    entities, pairs = extract_entities_and_pairs(text)
+    logger.debug(f"Entities: {entities}, pairs: {pairs}")
 
-    entity_dicts = [
-        {"text": e.text, "label": e.label, "start": e.start, "end": e.end}
-        for e in entities
-    ]
+    if not pairs:
+        return []
 
-    triplets = conceptnet.extract_triplets_with_conceptnet(
-        text, entity_dicts, threshold=threshold
-    )
-    logger.debug(f"ConceptNet triplets: {triplets}")
+    seen = set()
+    triplets = []
+
+    for head_ent, tail_ent in pairs:
+        key = (head_ent.text, tail_ent.text)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        result = conceptnet.resolve_relation_with_conceptnet(
+            original_text=text,
+            head_text=head_ent.text,
+            head_type=head_ent.label,
+            tail_text=tail_ent.text,
+            tail_type=tail_ent.label,
+            threshold=threshold,
+        )
+
+        if result:
+            relation, confidence = result
+            triplets.append(Triple(head_ent.text, relation, tail_ent.text))
+            logger.debug(
+                f"ConceptNet: {head_ent.text} --[{relation}]--> {tail_ent.text} "
+                f"(confidence: {confidence:.2f})"
+            )
+
     return triplets
 
 

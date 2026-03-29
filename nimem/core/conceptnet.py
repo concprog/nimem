@@ -5,7 +5,6 @@ from typing import List, Optional, Tuple
 
 import requests
 import numpy as np
-from returns.result import safe
 
 from .schema import (
     CONCEPTNET_RELATION_TEMPLATES,
@@ -185,49 +184,3 @@ def resolve_relation_with_conceptnet(
     return _get_best_relation_via_similarity(
         original_text, top_edges, head_text, tail_text, threshold
     )
-
-
-@safe
-def extract_triplets_with_conceptnet(
-    text: str,
-    entities: List[dict],
-    threshold: float = 0.5,
-) -> List[Triple]:
-    """Extract triplets using ConceptNet for relation disambiguation."""
-
-    triplets = []
-
-    for i, ent1 in enumerate(entities):
-        for ent2 in entities[i + 1 :]:
-            result = resolve_relation_with_conceptnet(
-                original_text=text,
-                head_text=ent1["text"],
-                head_type=ent1["label"],
-                tail_text=ent2["text"],
-                tail_type=ent2["label"],
-                threshold=threshold,
-            )
-
-            if result:
-                relation, confidence = result
-                triplets.append(Triple(ent1["text"], relation, ent2["text"]))
-
-            result_rev = resolve_relation_with_conceptnet(
-                original_text=text,
-                head_text=ent2["text"],
-                head_type=ent2["label"],
-                tail_text=ent1["text"],
-                tail_type=ent1["label"],
-                threshold=threshold,
-            )
-
-            if result_rev:
-                relation, confidence = result_rev
-                if relation not in {
-                    t.relation
-                    for t in triplets
-                    if t.subject == ent2["text"] and t.object == ent1["text"]
-                }:
-                    triplets.append(Triple(ent2["text"], relation, ent1["text"]))
-
-    return triplets
