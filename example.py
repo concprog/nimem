@@ -1,10 +1,7 @@
-from nimem.core.text_processing import (
-    extract_triplets,
-    process_text_pipeline,
-    extract_entities_spacy,
-    extract_relations_spacy,
-)
-from nimem.core.relation_extraction import extract_triplets_conceptnet
+from nimem.pipelines.ingest import extract_triplets, process_text_pipeline
+from nimem.nlp.spacy import extract_entities as extract_entities_spacy
+from nimem.nlp.spacy import extract_relations as extract_relations_spacy
+from nimem.storage.conceptnet_store import extract_triplets_conceptnet
 
 text = "John works for Apple Inc. and lives in San Francisco. Alice founded SpaceX. Sarah works for Google."
 
