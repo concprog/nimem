@@ -8,6 +8,7 @@ from nimem.domain.schema import CARDINALITY
 from nimem.storage import graph_store
 from nimem.embeddings import infinity
 from nimem.domain import graph_ops
+from nimem.domain.result_utils import unwrap_result, result_to_tuple
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +37,16 @@ def ingest_text(text: str, use_coref: bool = False) -> Result[str, Exception]:
             if cardinality == "ONE":
                 logger.info(f"Relation '{tri.relation}' is 1-to-1. Expiring old facts.")
                 res_expire = graph_store.expire_facts(tri.subject, tri.relation)
-                if isinstance(res_expire, Failure):
-                    logger.warning(f"Failed to expire facts: {res_expire}")
+                expire_msg = unwrap_result(res_expire, "Failed to expire facts")
+                if expire_msg is None:
+                    logger.warning(f"Failed to expire facts for {tri.subject}")
 
             res = graph_store.add_fact(tri.subject, tri.relation, tri.object)
-            if isinstance(res, Success):
+            success, err = result_to_tuple(res)
+            if success:
                 count += 1
             else:
-                errors.append(str(res.failure()))
+                errors.append(str(err))
 
         if errors and count == 0:
             return Failure(RuntimeError(f"All {len(errors)} facts failed: {errors}"))

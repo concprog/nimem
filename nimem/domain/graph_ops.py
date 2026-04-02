@@ -10,6 +10,7 @@ from nimem.domain.conceptnet_vocab import (
     CONCEPTNET_RELATION_TEMPLATES,
     CONCEPTNET_TO_RELATION,
 )
+from nimem.domain.result_utils import unwrap_result
 from nimem.embeddings.infinity import embed
 
 logger = logging.getLogger(__name__)
@@ -82,9 +83,22 @@ def _get_best_relation_via_similarity(
     if not all_reconstructed:
         return None
 
+    print(original_text)
+
     try:
-        original_emb = embed([original_text])
-        reconstructed_embs = embed(all_reconstructed)
+        original_emb_result = embed([original_text])
+        original_emb = unwrap_result(
+            original_emb_result, "Failed to embed original text"
+        )
+        if original_emb is None:
+            return None
+
+        reconstructed_embs_result = embed(all_reconstructed)
+        reconstructed_embs = unwrap_result(
+            reconstructed_embs_result, "Failed to embed candidates"
+        )
+        if reconstructed_embs is None:
+            return None
 
         if isinstance(original_emb, np.ndarray):
             original_vec = original_emb[0]

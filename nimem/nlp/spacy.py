@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 SPACY_MODEL = "en_core_web_md"
 SUBJECT_DEPS = {"nsubj", "nsubjpass"}
-OBJECT_DEPS = {"dobj", "attr", "oprd", "pobj"}
+OBJECT_DEPS = {"dobj", "attr", "oprd", "pobj", "dative", "iobj"}
 
 _model_instance = None
 
@@ -88,8 +88,8 @@ def find_entity_pairs(doc, entities: List[Entity]):
 
     for token in doc:
         if token.pos_ == "VERB":
-            subjects = [c for c in token.children if c.dep_ in ("nsubj", "nsubjpass")]
-            objects = [c for c in token.children if c.dep_ in ("dobj", "attr")]
+            subjects = [c for c in token.children if c.dep_ in SUBJECT_DEPS]
+            objects = [c for c in token.children if c.dep_ in OBJECT_DEPS]
             for prep in [c for c in token.children if c.dep_ == "prep"]:
                 objects.extend(c for c in prep.children if c.dep_ == "pobj")
             for subj in subjects:

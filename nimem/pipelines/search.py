@@ -5,6 +5,7 @@ from returns.result import Result, safe
 from nimem.storage.graph_store import query_valid_facts
 from nimem.embeddings.infinity import embed
 from nimem.domain.graph_ops import perform_clustering
+from nimem.domain.result_utils import unwrap_result, result_to_tuple
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,15 @@ def _cluster_facts(facts: List[Dict[str, Any]], min_cluster_size: int):
         return {}
 
     facts_list = [f"{f['relation']} {f['object']}" for f in facts]
-    vectors = embed(facts_list).unwrap()
-    clusters = perform_clustering(
+    vectors = unwrap_result(embed(facts_list), "Failed to embed facts")
+    if vectors is None:
+        return {}
+
+    clusters_result = perform_clustering(
         vectors, facts_list, min_cluster_size=min_cluster_size
-    ).unwrap()
+    )
+    clusters = unwrap_result(clusters_result, "Failed to cluster")
+    if clusters is None:
+        return {}
 
     return clusters
