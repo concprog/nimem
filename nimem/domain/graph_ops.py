@@ -70,7 +70,6 @@ def _get_best_relation_via_similarity(
     threshold: float = 0.5,
 ) -> Optional[Tuple[str, float]]:
     """Pick best relation using semantic similarity."""
-
     all_reconstructed = []
     edge_to_relation = {}
 
@@ -83,35 +82,34 @@ def _get_best_relation_via_similarity(
     if not all_reconstructed:
         return None
 
-    print(original_text)
-
     try:
         original_emb_result = embed([original_text])
         original_emb = unwrap_result(
             original_emb_result, "Failed to embed original text"
         )
         if original_emb is None:
-            return None
+            return _fallback_relation(candidate_edges)
 
         reconstructed_embs_result = embed(all_reconstructed)
         reconstructed_embs = unwrap_result(
             reconstructed_embs_result, "Failed to embed candidates"
         )
         if reconstructed_embs is None:
-            return None
+            return _fallback_relation(candidate_edges)
 
-        if isinstance(original_emb, np.ndarray):
-            original_vec = original_emb[0]
-        else:
-            original_vec = np.array(original_emb[0])
+        original_vec = (
+            original_emb[0]
+            if isinstance(original_emb, np.ndarray)
+            else np.array(original_emb[0])
+        )
 
         similarities = []
         for i, recon in enumerate(all_reconstructed):
-            if isinstance(reconstructed_embs, np.ndarray):
-                recon_vec = reconstructed_embs[i]
-            else:
-                recon_vec = np.array(reconstructed_embs[i])
-
+            recon_vec = (
+                reconstructed_embs[i]
+                if isinstance(reconstructed_embs, np.ndarray)
+                else np.array(reconstructed_embs[i])
+            )
             sim = np.dot(original_vec, recon_vec) / (
                 np.linalg.norm(original_vec) * np.linalg.norm(recon_vec) + 1e-8
             )
@@ -120,7 +118,7 @@ def _get_best_relation_via_similarity(
             )
 
         if not similarities:
-            return None
+            return _fallback_relation(candidate_edges)
 
         similarities.sort(key=lambda x: x[1], reverse=True)
         best_sentence, best_sim, best_edge = similarities[0]
@@ -130,7 +128,6 @@ def _get_best_relation_via_similarity(
 
         rel_uri = best_edge.get("rel", {})
         rel_id = rel_uri.get("@id", "") if isinstance(rel_uri, dict) else ""
-
         relation = CONCEPTNET_TO_RELATION.get(rel_id)
 
         if relation and relation in RELATIONS:
@@ -139,4 +136,22 @@ def _get_best_relation_via_similarity(
     except Exception as e:
         logger.warning(f"Similarity computation failed: {e}")
 
-    return None
+    return _fallback_relation(candidate_edges)
+
+
+def _fallback_relation(candidate_edges: List[dict]) -> Optional[Tuple[str, float]]:
+    """Fallback: return best relation from candidate edges sorted by weight."""
+    valid = []
+    for edge in candidate_edges:
+        rel_uri = edge.get("rel", {})
+        rel_id = rel_uri.get("@id", "") if isinstance(rel_uri, dict) else ""
+        relation = CONCEPTNET_TO_RELATION.get(rel_id)
+        if relation and relation in RELATIONS:
+            weight = edge.get("weight", 0.5)
+            valid.append((relation, weight))
+
+    if not valid:
+        return None
+
+    valid.sort(key=lambda x: x[1], reverse=True)
+    return valid[0][0], float(valid[0][1])

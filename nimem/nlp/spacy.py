@@ -82,32 +82,37 @@ def _get_entity_for_token(token, token_to_entity: dict) -> Optional[Entity]:
 
 
 def find_entity_pairs(doc, entities: List[Entity]):
-    """Find syntactically connected entity pairs via dependency parsing."""
+    """Find all entities (named + unseen) and generate pairs from them."""
     token_to_entity = _build_entity_token_map(doc, entities)
-    pairs = set()
+    all_entities = list(entities)
+    seen_starts = {e.start for e in entities}
 
     for token in doc:
-        if token.pos_ == "VERB":
-            subjects = [c for c in token.children if c.dep_ in SUBJECT_DEPS]
-            objects = [c for c in token.children if c.dep_ in OBJECT_DEPS]
-            for prep in [c for c in token.children if c.dep_ == "prep"]:
-                objects.extend(c for c in prep.children if c.dep_ == "pobj")
-            for subj in subjects:
-                for obj in objects:
-                    e1 = _get_entity_for_token(subj, token_to_entity)
-                    e2 = _get_entity_for_token(obj, token_to_entity)
-                    if e1 and e2 and e1 != e2:
-                        pairs.add((e1, e2))
+        if token.i not in token_to_entity:
+            if token.pos_ in {"NOUN", "PROPN", "VERB"}:
+                all_entities.append(
+                    Entity(
+                        text=token.text,
+                        label="unseen",
+                        start=token.idx,
+                        end=token.idx + len(token.text),
+                    )
+                )
+                seen_starts.add(token.idx)
 
-        elif token.pos_ == "NOUN":
-            for prep in [c for c in token.children if c.dep_ == "prep"]:
-                for pobj in [c for c in prep.children if c.dep_ == "pobj"]:
-                    e1 = _get_entity_for_token(token, token_to_entity)
-                    e2 = _get_entity_for_token(pobj, token_to_entity)
-                    if e1 and e2 and e1 != e2:
-                        pairs.add((e1, e2))
+    sentences = list(doc.sents)
+    pairs = []
+    for sent in sentences:
+        sent_entities = [
+            e
+            for e in all_entities
+            if e.start >= sent.start_char and e.end <= sent.end_char
+        ]
+        for i, e1 in enumerate(sent_entities):
+            for e2 in sent_entities[i + 1 :]:
+                pairs.append((e1, e2))
 
-    return list(pairs)
+    return all_entities, pairs
 
 
 def extract_entities_and_pairs(text: str):
@@ -126,9 +131,9 @@ def extract_entities_and_pairs(text: str):
         if ent.label_ in SPACY_LABEL_MAP
     ]
 
-    pairs = find_entity_pairs(doc, entities)
-    logger.debug(f"Entities: {entities}, pairs: {pairs}")
-    return entities, pairs
+    all_entities, pairs = find_entity_pairs(doc, entities)
+    logger.debug(f"Entities: {all_entities}, pairs: {pairs}")
+    return all_entities, pairs
 
 
 def _infer_relation(entity1_label: str, entity2_label: str) -> str | None:

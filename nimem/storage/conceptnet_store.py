@@ -265,6 +265,11 @@ def _disambiguate_with_conceptnet(
     return disambiguated
 
 
+def has_named_entity(entities: List[Entity]) -> bool:
+    """Check if any entity is a named entity (not 'unseen')."""
+    return any(e.label != "unseen" for e in entities)
+
+
 def extract_triplets_conceptnet(text: str, threshold: float = 0.5) -> List[Triple]:
     """Extract triplets using dependency-based pair finding + ConceptNet disambiguation."""
     from nimem.nlp.spacy import extract_entities_and_pairs
@@ -302,3 +307,22 @@ def extract_triplets_conceptnet(text: str, threshold: float = 0.5) -> List[Tripl
             )
 
     return triplets
+
+
+@lru_cache(maxsize=1000)
+def entity_exists_in_conceptnet(entity_text: str) -> bool:
+    """Check if an entity exists in ConceptNet by checking for any outgoing edge."""
+    node = f"/c/en/{_normalize(entity_text)}"
+    try:
+        g = get_conceptnet_graph()
+        query = """
+        MATCH (s:Concept)-[r]->(e:Concept)
+        WHERE s.uri = $node OR e.uri = $node
+        RETURN count(r) LIMIT 1
+        """
+        result = g.query(query, {"node": node})
+        for row in result.result_set:
+            return row[0] > 0
+        return False
+    except Exception:
+        return False
