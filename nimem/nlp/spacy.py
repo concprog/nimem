@@ -69,15 +69,15 @@ def _build_entity_token_map(doc, entities: List[Entity]) -> dict:
 
 
 def _get_entity_for_token(token, token_to_entity: dict) -> Optional[Entity]:
-    """Find entity for a token, checking children/ancestors for compounds."""
+    """Find entity for a token, checking only strict compound relationships."""
     if token.i in token_to_entity:
         return token_to_entity[token.i]
     for child in token.children:
-        if child.i in token_to_entity:
+        if child.dep_ in {"compound", "name", "flat"} and child.i in token_to_entity:
             return token_to_entity[child.i]
-    for ancestor in token.ancestors:
-        if ancestor.i in token_to_entity:
-            return token_to_entity[ancestor.i]
+    if token.dep_ in {"compound", "name", "flat"} and token.head.i in token_to_entity:
+        return token_to_entity[token.head.i]
+
     return None
 
 
