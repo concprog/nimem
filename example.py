@@ -39,10 +39,12 @@ triplets = extract_triplets_conceptnet(text)
 for t in triplets:
     print(f"  {t.subject} --[{t.relation}]--> {t.object}")
 
+
 # Method 5: Full pipeline with coreference
 print("\n=== Pipeline with coreference ===")
-long_text = "John works for Apple Inc. He lives in San Francisco."
-resolved, triplets = process_text_pipeline(long_text, use_coref=False).unwrap()
+#long_text = "John works for Apple Inc. He lives in San Francisco."
+long_text = "John works for Apple Inc. and he lives in San Francisco. Alice founded SpaceX. Sarah works for Google."
+resolved, triplets = process_text_pipeline(long_text, use_coref=True).unwrap()
 print(f"Resolved: {resolved}")
 for t in triplets:
     print(f"  {t.subject} --[{t.relation}]--> {t.object}")
