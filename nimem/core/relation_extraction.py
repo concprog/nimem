@@ -8,6 +8,7 @@ from .schema import (
     ENTITY_RELATION_MAP,
     RELATIONS,
     VERB_TO_RELATION,
+    VERB_RULES,
     WITH_PREPOSITIONS,
     Triple,
     Entity,
@@ -72,6 +73,11 @@ def _get_noun_phrase(token) -> str:
     parts.append(token.text)
     return " ".join(parts)
 
+def _get_entity_label(token, doc):
+    for ent in doc.ents:
+        if ent.start <= token.i < ent.end:
+            return ent.label_
+    return None
 
 def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]:
     """Extract relations based on verb parsing."""
@@ -84,10 +90,11 @@ def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]
             continue
 
         verb_lemma = token.lemma_.lower()
-        relation = VERB_TO_RELATION.get(verb_lemma)
-        if not relation:
+        rule = VERB_RULES.get(verb_lemma)
+        if not rule:
             continue
 
+        relation = rule["relation"]
         subjects = [c for c in token.children if c.dep_ in ("nsubj", "nsubjpass")]
         direct_objects = [
             c for c in token.children if c.dep_ in ("dobj", "attr", "oprd")
@@ -109,6 +116,10 @@ def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]
         all_objects = direct_objects + prep_objects
 
         for subj in subjects:
+            subj_label = _get_entity_label(subj, doc)
+
+            if subj_label not in rule.get("subject_types", set()):
+                continue
             subj_text = subj.text
             if subj_text not in known_entities:
                 subj_ent = None
@@ -120,6 +131,9 @@ def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]
                     continue
 
             for obj in all_objects:
+                obj_label = _get_entity_label(obj, doc)
+                if obj_label not in rule.get("object_types", set()):
+                    continue
                 obj_text = obj.text
                 if obj_text in known_entities:
                     triplets.append(Triple(subj_text, relation, obj_text))
@@ -132,9 +146,17 @@ def _extract_verb_relations(text: str, known_entities: Set[str]) -> List[Triple]
                             break
 
                     if obj_ent:
+                        if rule.get("reverse"):
+                            triplets.append(Triple(obj_text, relation, subj_text))
+                        else:
+                            triplets.append(Triple(subj_text, relation, obj_text))
                         triplets.append(Triple(subj_text, relation, obj_text))
                     else:
                         descriptive_name = f"{subj_text}'s {obj.text}"
+                        if rule.get("reverse"):
+                            triplets.append(Triple(obj_text, relation, subj_text))
+                        else:
+                            triplets.append(Triple(subj_text, relation, obj_text))
                         triplets.append(Triple(subj_text, relation, descriptive_name))
 
             for with_obj in with_objects:
@@ -191,7 +213,6 @@ def _extract_gliner_relations(text: str) -> List[Triple]:
     return triplets
 
 
-@safe
 def extract_triplets_spacy(text: str) -> List[Triple]:
     """Full spaCy pipeline: entity extraction + relation extraction."""
     from .entity_recognition import extract_entities_spacy
@@ -203,7 +224,6 @@ def extract_triplets_spacy(text: str) -> List[Triple]:
     return triplets
 
 
-@safe
 def extract_triplets_gliner(text: str) -> List[Triple]:
     """GLiNER joint extraction (entities + relations)."""
     triplets = _extract_gliner_relations(text)

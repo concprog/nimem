@@ -113,3 +113,39 @@ CARDINALITY = {
     "created": "MANY",
     "worked_with": "MANY",
 }
+VERB_RULES = {
+    "work": {
+        "relation": "works_for",
+        "subject_types": {"PERSON"},
+        "object_types": {"ORG"},
+        "prepositions": {"at", "for"},
+    },
+    "hire": {
+        "relation": "works_for",
+        "subject_types": {"ORG"},
+        "object_types": {"PERSON"},
+        "reverse": True,  # important
+    },
+    "found": {
+        "relation": "founded",
+        "subject_types": {"PERSON"},
+        "object_types": {"ORG"},
+    },
+    "acquire": {
+        "relation": "owns",
+        "subject_types": {"ORG"},
+        "object_types": {"ORG"},
+    },
+    "live": {
+        "relation": "located_in",
+        "subject_types": {"PERSON"},
+        "object_types": {"GPE", "LOC"},
+        "prepositions": {"in"},
+    },
+    "collaborate": {
+        "relation": "worked_with",
+        "subject_types": {"PERSON", "ORG"},
+        "object_types": {"PERSON", "ORG"},
+        "prepositions": {"with"},
+    },
+}
