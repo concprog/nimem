@@ -8,6 +8,7 @@ dependencies = [
     "gliner2>=0.2.0",
     "fastcoref>=2.0",
     "infinity-emb[torch]>=0.0.1",
+    "diskcache",
     "falkordblite>=0.0.1",
     "numpy>=1.20.0",
     "returns>=0.20.0",
